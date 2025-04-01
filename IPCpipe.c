@@ -1,29 +1,37 @@
 #include <stdio.h>
 #include <unistd.h>
-#include <fcntl.h>
 #include <string.h>
-
-#define FIFO_NAME "/tmp/my_fifo"
+#include <sys/wait.h>
 
 int main() {
-    int fifo;
-    char write_msg[] = "Hello from Parent Process via FIFO!";
+    int pipefd[2];
+    pid_t pid;
+    char write_msg[] = "Hello from Parent Process!";
+    char read_msg[100];
 
-    // Create a FIFO special file
-    if (mkfifo(FIFO_NAME, 0666) == -1) {
-        perror("mkfifo failed");
+    // Create a pipe
+    if (pipe(pipefd) == -1) {
+        perror("Pipe failed");
         return 1;
     }
 
-    // Open the FIFO for writing
-    fifo = open(FIFO_NAME, O_WRONLY);
-    if (fifo == -1) {
-        perror("FIFO open failed");
+    pid = fork();
+    if (pid == -1) {
+        perror("Fork failed");
         return 1;
     }
 
-    write(fifo, write_msg, strlen(write_msg) + 1);
-    close(fifo);
+    if (pid > 0) { // Parent process
+        close(pipefd[0]); // Close read end of the pipe
+        write(pipefd[1], write_msg, strlen(write_msg) + 1);
+        close(pipefd[1]);
+        wait(NULL); // Wait for child process to finish
+    } else { // Child process
+        close(pipefd[1]); // Close write end of the pipe
+        read(pipefd[0], read_msg, sizeof(read_msg));
+        printf("Child received: %s\n", read_msg);
+        close(pipefd[0]);
+    }
 
     return 0;
 }
